@@ -4,7 +4,7 @@ This project is about building my ideal API for 3D programming. My vision is to 
 
 # example
 
-```
+```cpp
 #include <cn/camera/camera.hpp>
 #include <cn/color/color.hpp>
 #include <cn/graphics/light.hpp>
