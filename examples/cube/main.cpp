@@ -1,10 +1,3 @@
-# cn3d
-
-This project is about building my ideal API for 3D programming. My vision is to make 3D a practical tool rather than a complex end goal, by stripping away unnecessary complexity and narrowing the infinite paths into a simple, accessible road.
-
-# example
-
-```
 #include <cn/camera/camera.hpp>
 #include <cn/color/color.hpp>
 #include <cn/graphics/light.hpp>
@@ -123,4 +116,3 @@ int main()
 
     return 0;
 }
-```
