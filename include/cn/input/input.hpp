@@ -20,6 +20,7 @@ static constexpr key_t q = sf::Keyboard::Key::Q;
 static constexpr key_t e = sf::Keyboard::Key::E;
 static constexpr key_t s = sf::Keyboard::Key::S;
 static constexpr key_t w = sf::Keyboard::Key::W;
+static constexpr key_t z = sf::Keyboard::Key::Z;
 static constexpr key_t space = sf::Keyboard::Key::Space;
 
 } // namespace key

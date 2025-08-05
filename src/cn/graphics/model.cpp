@@ -17,9 +17,16 @@ bgfx::VertexLayout make_position_layout()
     bgfx::VertexLayout layout;
     layout.begin()
         .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+        .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
         .end();
     return layout;
 }
+
+struct PosColorVertex
+{
+    glm::vec3 pos;
+    uint32_t  abgr;
+};
 
 } // namespace
 
@@ -34,17 +41,23 @@ model::model(bgfx::VertexBufferHandle vertex_buffer, bgfx::IndexBufferHandle ind
 
 model model::make_plane(const cn::math::vector<std::float32_t, 2>& size)
 {
-    std::vector<glm::vec3> vertices = {
-        {-size[0] / 2.0f, 0.0f, -size[1] / 2.0f},
-        {size[0] / 2.0f, 0.0f, -size[1] / 2.0f},
-        {-size[0] / 2.0f, 0.0f, size[1] / 2.0f},
-        {size[0] / 2.0f, 0.0f, size[1] / 2.0f}};
+    float hx = size[0] * 0.5f;
+    float hz = size[1] * 0.5f;
 
-    std::vector<uint16_t> indices = {0, 1, 2, 1, 3, 2};
+    std::vector<PosColorVertex> vertices = {
+        {{-hx, 0.0f, -hz}, 0xff999999}, // 0
+        {{hx, 0.0f, -hz}, 0xff999999},  // 1
+        {{hx, 0.0f, hz}, 0xff999999},   // 2
+        {{-hx, 0.0f, hz}, 0xff999999},  // 3
+    };
+
+    std::vector<uint16_t> indices = {
+        0, 1, 2,
+        0, 2, 3};
 
     bgfx::VertexLayout layout = make_position_layout();
 
-    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(glm::vec3)));
+    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(PosColorVertex)));
     const bgfx::Memory* ib_mem = bgfx::copy(indices.data(), uint32_t(indices.size() * sizeof(uint16_t)));
 
     bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(vb_mem, layout);
@@ -59,29 +72,45 @@ model model::make_cube(const cn::math::vector<std::float32_t, 3>& size)
     float hy = size[1] * 0.5f;
     float hz = size[2] * 0.5f;
 
-    std::vector<glm::vec3> vertices = {
-        {-hx, -hy, -hz},
-        {hx, -hy, -hz},
-        {hx, hy, -hz},
-        {-hx, hy, -hz},
-        {-hx, -hy, hz},
-        {hx, -hy, hz},
-        {hx, hy, hz},
-        {-hx, hy, hz},
+    std::vector<PosColorVertex> vertices = {
+        {{-hx, -hy, -hz}, 0xff0000ff},
+        {{hx, -hy, -hz}, 0xff00ff00},
+        {{hx, hy, -hz}, 0xff00ffff},
+        {{-hx, hy, -hz}, 0xffff0000},
+        {{-hx, -hy, hz}, 0xffffff00},
+        {{hx, -hy, hz}, 0xffff00ff},
+        {{hx, hy, hz}, 0xffffffff},
+        {{-hx, hy, hz}, 0xff808080},
     };
 
     std::vector<uint16_t> indices = {
-        0, 1, 2, 2, 3, 0, // back
-        4, 5, 6, 6, 7, 4, // front
-        0, 4, 7, 7, 3, 0, // left
-        1, 5, 6, 6, 2, 1, // right
-        3, 2, 6, 6, 7, 3, // top
-        0, 1, 5, 5, 4, 0, // bottom
-    };
+        // Back face (-Z)
+        0, 1, 2,
+        0, 2, 3,
+
+        // Front face (+Z)
+        4, 6, 5,
+        4, 7, 6,
+
+        // Left face (-X)
+        0, 3, 7,
+        0, 7, 4,
+
+        // Right face (+X)
+        1, 5, 6,
+        1, 6, 2,
+
+        // Top face (+Y)
+        3, 2, 6,
+        3, 6, 7,
+
+        // Bottom face (-Y)
+        0, 4, 5,
+        0, 5, 1};
 
     bgfx::VertexLayout layout = make_position_layout();
 
-    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(glm::vec3)));
+    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(PosColorVertex)));
     const bgfx::Memory* ib_mem = bgfx::copy(indices.data(), uint32_t(indices.size() * sizeof(uint16_t)));
 
     bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(vb_mem, layout);
@@ -133,14 +162,14 @@ model model::load_from_file(std::string_view path)
     const auto& pos_view = gltf_model.bufferViews[pos_accessor.bufferView];
     const auto& pos_buffer = gltf_model.buffers[pos_view.buffer];
 
-    std::vector<glm::vec3> vertices;
+    std::vector<PosColorVertex> vertices;
     vertices.reserve(pos_accessor.count);
 
     const uint8_t* pos_data = pos_buffer.data.data() + pos_view.byteOffset + pos_accessor.byteOffset;
     for(size_t i = 0; i < pos_accessor.count; ++i)
     {
         const float* f = reinterpret_cast<const float*>(pos_data + i * sizeof(glm::vec3));
-        vertices.emplace_back(f[0], f[1], f[2]);
+        vertices.push_back({{f[0], f[1], f[2]}, 0xffaaaaaa});
     }
 
     std::vector<uint16_t> indices;
@@ -161,12 +190,11 @@ model model::load_from_file(std::string_view path)
     else
     {
         std::cerr << "Warning: No indices found in primitive.\n";
-        // If no indices, we could generate them here — optional.
     }
 
     bgfx::VertexLayout layout = make_position_layout();
 
-    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(glm::vec3)));
+    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(PosColorVertex)));
     const bgfx::Memory* ib_mem = bgfx::copy(indices.data(), uint32_t(indices.size() * sizeof(uint16_t)));
 
     bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(vb_mem, layout);

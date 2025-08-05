@@ -1,136 +1,142 @@
+#include <SFML/OpenGL.hpp>
+#include <SFML/Window.hpp>
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
-#include <bx/math.h>
-#include <GLFW/glfw3.h>
 #include <cstdint>
+#include <fstream>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 
-// ─────────────────────────── Vertex format ────────────────────────────
-struct PosColorVertex
-{
+// Vertex format
+struct PosColorVertex {
     float x, y, z;
     uint32_t abgr;
-    static void init(bgfx::VertexLayout& layout)
-    {
+
+    static void init(bgfx::VertexLayout& layout) {
         layout.begin()
-            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-            .add(bgfx::Attrib::Color0,   4, bgfx::AttribType::Uint8, true)
-        .end();
+              .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+              .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+              .end();
     }
 };
 
-// Cube geometry
-static PosColorVertex vertices[] =
-{
-    // +X
-    {-1,  1,  1, 0xff0000ff}, { 1,  1,  1, 0xff0000ff},
-    {-1, -1,  1, 0xff0000ff}, { 1, -1,  1, 0xff0000ff},
-    // -X
-    {-1,  1, -1, 0xff00ff00}, { 1,  1, -1, 0xff00ff00},
-    {-1, -1, -1, 0xff00ff00}, { 1, -1, -1, 0xff00ff00},
+// Geometry data
+static constexpr PosColorVertex cubeVertices[] = {
+    {-1, 1, 1, 0xff0000ff}, {1, 1, 1, 0xff0000ff},
+    {-1, -1, 1, 0xff0000ff}, {1, -1, 1, 0xff0000ff},
+    {-1, 1, -1, 0xff00ff00}, {1, 1, -1, 0xff00ff00},
+    {-1, -1, -1, 0xff00ff00}, {1, -1, -1, 0xff00ff00},
 };
 
-static const uint16_t indices[] =
-{
-    0, 1, 3, 0, 3, 2,   // front
-    4, 6, 7, 4, 7, 5,   // back
-    4, 5, 1, 4, 1, 0,   // top
-    2, 3, 7, 2, 7, 6,   // bottom
-    0, 2, 6, 0, 6, 4,   // left
-    1, 5, 7, 1, 7, 3    // right
+static constexpr uint16_t cubeIndices[] = {
+    0, 1, 3, 0, 3, 2,
+    4, 6, 7, 4, 7, 5,
+    4, 5, 1, 4, 1, 0,
+    2, 3, 7, 2, 7, 6,
+    0, 2, 6, 0, 6, 4,
+    1, 5, 7, 1, 7, 3,
 };
 
-// Helper: load a binary shader file
-bgfx::ShaderHandle loadShader(const char* path)
-{
-    FILE* fp = fopen(path, "rb");
-    fseek(fp, 0, SEEK_END);
-    const long size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    const bgfx::Memory* mem = bgfx::alloc(size + 1);
-    fread(mem->data, 1, size, fp);
-    fclose(fp);
-    mem->data[mem->size-1] = '\0';
+// Shader loader
+bgfx::ShaderHandle loadShader(const char* filePath) {
+    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open shader: " << filePath << '\n';
+        return BGFX_INVALID_HANDLE;
+    }
+
+    const auto size = static_cast<std::streamsize>(file.tellg());
+    file.seekg(0, std::ios::beg);
+
+    const bgfx::Memory* mem = bgfx::alloc(static_cast<uint32_t>(size + 1));
+    if (!file.read(reinterpret_cast<char*>(mem->data), size)) {
+        std::cerr << "Failed to read shader: " << filePath << '\n';
+        return BGFX_INVALID_HANDLE;
+    }
+
+    mem->data[mem->size - 1] = '\0';
     return bgfx::createShader(mem);
 }
 
-int main()
-{
-    // ───────────── GLFW window ──────────────
-    glfwInit();
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "BGFX Cube", nullptr, nullptr);
+int main() {
+    // SFML window
+    sf::ContextSettings settings;
+    settings.depthBits = 24;
+    settings.stencilBits = 8;
+    settings.majorVersion = 3;
+    settings.minorVersion = 3;
 
-    // ───────────── BGFX init ───────────────
+    sf::Window window(sf::VideoMode({1280, 720}), "BGFX + SFML", sf::Style::Default, sf::State::Windowed, settings);
+
+    // BGFX platform setup
     bgfx::PlatformData pd{};
-#if BX_PLATFORM_WINDOWS
-    pd.nwh = glfwGetWin32Window(window);
-#elif BX_PLATFORM_LINUX || BX_PLATFORM_BSD
-    pd.nwh = glfwGetX11Window(window);
-#elif BX_PLATFORM_OSX
-    pd.nwh = glfwGetCocoaWindow(window);
-#endif
-    bgfx::Init init{};
-    init.type = bgfx::RendererType::Count;   // autodetect
-    init.platformData = pd;
-    int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
-    init.resolution.width  = static_cast<uint32_t>(width);
-    init.resolution.height = static_cast<uint32_t>(height);
-    init.resolution.reset  = BGFX_RESET_VSYNC;
-    bgfx::init(init);
-    bgfx::setDebug(BGFX_DEBUG_TEXT);
+    pd.nwh = (void*)window.getNativeHandle();
+    pd.ndt = nullptr;
 
-    // ───────────── Geometry buffers ─────────
+    bgfx::Init init;
+    init.type = bgfx::RendererType::Direct3D11;
+    init.platformData = pd;
+    init.resolution.width = 1280;
+    init.resolution.height = 720;
+    init.resolution.reset = BGFX_RESET_VSYNC;
+
+    if (!bgfx::init(init)) {
+        std::cerr << "Failed to initialize BGFX.\n";
+        return 1;
+    }
+
+    bgfx::setDebug(BGFX_DEBUG_TEXT);
+    bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
+
+    // Buffers
     bgfx::VertexLayout layout;
     PosColorVertex::init(layout);
-    bgfx::VertexBufferHandle vbo =
-        bgfx::createVertexBuffer(bgfx::makeRef(vertices, sizeof(vertices)), layout);
-    bgfx::IndexBufferHandle  ibo =
-        bgfx::createIndexBuffer(bgfx::makeRef(indices,  sizeof(indices)));
 
-    // ───────────── Shaders & program ───────
-    bgfx::ShaderHandle vsh = loadShader("debug.vert.bin");
-    bgfx::ShaderHandle fsh = loadShader("debug.frag.bin");
-    bgfx::ProgramHandle prog = bgfx::createProgram(vsh, fsh, true); // shaders auto-destroy
+    const bgfx::Memory* vbMem = bgfx::copy(cubeVertices, sizeof(cubeVertices));
+    bgfx::VertexBufferHandle vbo = bgfx::createVertexBuffer(vbMem, layout);
 
-    // ───────────── View transform (static) ─
-    float view[16];
-    float proj[16];
-    const bx::Vec3 eye    = { 0.0f, 0.0f, -7.0f };
-    const bx::Vec3 at     = { 0.0f, 0.0f,  0.0f };
-    const bx::Vec3 up     = { 0.0f, 1.0f,  0.0f };
-    bx::mtxLookAt(view, eye, at, up);
-    bx::mtxProj(proj, 60.0f, float(width)/float(height), 0.1f, 100.0f, bgfx::getCaps()->homogeneousDepth);
-    bgfx::setViewTransform(0, view, proj);
-    bgfx::setViewRect(0, 0, 0, uint16_t(width), uint16_t(height));
+    const bgfx::Memory* ibMem = bgfx::copy(cubeIndices, sizeof(cubeIndices));
+    bgfx::IndexBufferHandle ibo = bgfx::createIndexBuffer(ibMem);
 
-    // ───────────── Main loop ───────────────
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
+    // Shader program
+    auto vsh = loadShader("shaders/vs_cubes.bin");
+    auto fsh = loadShader("shaders/fs_cubes.bin");
 
-        // Clear view 0.
-        bgfx::setViewClear(0, BGFX_CLEAR_COLOR|BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
+    if (!bgfx::isValid(vsh) || !bgfx::isValid(fsh)) return 1;
 
-        // Model matrix (identity)
-        float mtx[16];
-        bx::mtxRotateY(mtx, (float)glfwGetTime()); // a slow spin
-        bgfx::setTransform(mtx);
+    auto prog = bgfx::createProgram(vsh, fsh, true);
+    if (!bgfx::isValid(prog)) return 1;
 
-        // Bind buffers & submit
+    // Camera setup
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, -7.0f),
+                                 glm::vec3(0.0f, 0.0f, 0.0f),
+                                 glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 proj = glm::perspective(glm::radians(60.0f), 1280.f / 720.f, 0.1f, 100.0f);
+
+    bgfx::setViewTransform(0, glm::value_ptr(view), glm::value_ptr(proj));
+    bgfx::setViewRect(0, 0, 0, 1280, 720);
+
+    // Model is identity (no rotation)
+    glm::mat4 model(1.0f);
+    bgfx::setTransform(glm::value_ptr(model));
+
+    // Main loop
+    while (window.isOpen()) {
+        while (const std::optional event = window.pollEvent()) {
+            if (event->is<sf::Event::Closed>())
+                window.close();
+        }
+
+        bgfx::touch(0);
         bgfx::setVertexBuffer(0, vbo);
         bgfx::setIndexBuffer(ibo);
         bgfx::setState(BGFX_STATE_DEFAULT);
         bgfx::submit(0, prog);
-
-        // Frame
         bgfx::frame();
     }
 
-    // ───────────── Shutdown ────────────────
     bgfx::shutdown();
-    glfwDestroyWindow(window);
-    glfwTerminate();
     return 0;
 }

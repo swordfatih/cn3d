@@ -1,8 +1,0 @@
-shaderc.exe -f shaders/shader.vert.sc -o shaders/shader.bin --type vertex --platform linux --profile spirv --varyingdef shaders/varying.def.sc -i bgfx\src
-shaderc.exe -f shaders/shader.frag.sc -o shaders/shader.bin --type fragment --platform linux --profile spirv --varyingdef shaders/varying.def.sc -i bgfx\src
-
-shaderc.exe -f shaders/shader.vert.sc -o shaders/shader.bin --type vertex --platform windows --profile s_5_0 --varyingdef shaders/varying.def.sc -i bgfx\src
-shaderc.exe -f shaders/shader.frag.sc -o shaders/shader.bin --type fragment --platform windows --profile s_5_0 --varyingdef shaders/varying.def.sc -i bgfx\src
-
-."C:/Users/fatih/Documents/Github/bgfx.cmake/build/cmake/bgfx/shaderc.exe" -f shaders/lit.vert.sc -o shaders/lit.vert.bin --type vertex --platform windows --profile s_5_0 --varyingdef shaders/varying.def.sc -i C:\Users\fatih\Documents\Github\bgfx.cmake\bgfx\src
-."C:/Users/fatih/Documents/Github/bgfx.cmake/build/cmake/bgfx/shaderc.exe" -f shaders/lit.frag.sc -o shaders/lit.frag.bin --type fragment --platform windows --profile s_5_0 --varyingdef shaders/varying.def.sc -i C:\Users\fatih\Documents\Github\bgfx.cmake\bgfx\src
