@@ -53,12 +53,7 @@ void renderer::draw(const cn::model& model, const cn::shader& shader, const glm:
     bgfx::setVertexBuffer(0, model.vertex_buffer());
     bgfx::setIndexBuffer(model.index_buffer());
 
-    bgfx::setState(
-        BGFX_STATE_WRITE_RGB |
-        BGFX_STATE_WRITE_A |
-        BGFX_STATE_WRITE_Z |
-        BGFX_STATE_DEPTH_TEST_LESS |
-        BGFX_STATE_CULL_CCW);
+    bgfx::setState(BGFX_STATE_DEFAULT);
 
     shader.submit(0);
 }

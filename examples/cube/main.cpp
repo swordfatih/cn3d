@@ -21,8 +21,8 @@ int main()
     cn::camera camera;
 
     auto shader = cn::shader::load("shaders/vs_cubes.bin", "shaders/fs_cubes.bin");
-    auto box = cn::model::make_cube({1.0f, 1.0f, 1.0f});
-    auto plane = cn::model::make_plane({10.0f, 10.0f});
+    auto plane = cn::model::load_from_file("assets/plane.glb");
+    auto box = cn::model::load_from_file("assets/cube.glb");
 
     float angle = 0.0f;
     float radius = 7.0f;
@@ -40,7 +40,7 @@ int main()
         camera.look_at({x, 5.0f, z}, {0.0f, 0.0f, 0.0f});
 
         glm::mat4 plane_transform = glm::mat4(1.0f);
-        glm::mat4 cube_transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f));
+        glm::mat4 cube_transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f));
 
         renderer.begin_frame(camera);
         renderer.draw(plane, shader, plane_transform);

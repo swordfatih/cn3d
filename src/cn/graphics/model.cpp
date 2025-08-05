@@ -1,9 +1,10 @@
 #include <bgfx/bgfx.h>
 #include <cn/graphics/model.hpp>
-#include <cstring>
 #include <glm/glm.hpp>
 #include <iostream>
+#include <string_view>
 #include <tiny_gltf.h>
+#include <variant>
 #include <vector>
 
 namespace cn
@@ -12,195 +13,160 @@ namespace cn
 namespace
 {
 
-bgfx::VertexLayout make_position_layout()
+struct vertex
+{
+    glm::vec3 position;
+    glm::vec4 color;
+};
+
+bgfx::VertexLayout make_vertex_layout()
 {
     bgfx::VertexLayout layout;
     layout.begin()
         .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-        .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+        .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Float)
         .end();
     return layout;
 }
 
-struct PosColorVertex
+template <typename t>
+const t* get_data_pointer(const tinygltf::BufferView& view, const tinygltf::Accessor& accessor, const tinygltf::Buffer& buffer)
 {
-    glm::vec3 pos;
-    uint32_t  abgr;
-};
+    auto byte_offset = view.byteOffset + accessor.byteOffset;
+    return reinterpret_cast<const t*>(buffer.data.data() + byte_offset);
+}
+
+std::vector<vertex> extract_vertices(const tinygltf::Model& gltf, const tinygltf::Primitive& primitive)
+{
+    std::vector<vertex> vertices;
+
+    const auto& accessor = gltf.accessors.at(primitive.attributes.at("POSITION"));
+    const auto& view = gltf.bufferViews.at(accessor.bufferView);
+    const auto& buffer = gltf.buffers.at(view.buffer);
+
+    std::size_t         count = accessor.count;
+    std::size_t         stride = view.byteStride ? view.byteStride : sizeof(glm::vec3);
+    const std::uint8_t* data = buffer.data.data() + view.byteOffset + accessor.byteOffset;
+
+    // 🆕 Get base color from material
+    glm::vec4 base_color{0.8f, 0.8f, 0.8f, 1.0f};
+
+    if(primitive.material >= 0 && static_cast<std::size_t>(primitive.material) < gltf.materials.size())
+    {
+        const auto& material = gltf.materials[primitive.material];
+        const auto& pbr = material.pbrMetallicRoughness;
+
+        if(!pbr.baseColorFactor.empty())
+        {
+            base_color = glm::vec4(
+                static_cast<float>(pbr.baseColorFactor[0]),
+                static_cast<float>(pbr.baseColorFactor[1]),
+                static_cast<float>(pbr.baseColorFactor[2]),
+                static_cast<float>(pbr.baseColorFactor[3]));
+        }
+    }
+
+    vertices.reserve(count);
+    for(std::size_t i = 0; i < count; ++i)
+    {
+        const float* position_ptr = reinterpret_cast<const float*>(data + i * stride);
+        glm::vec3    position = {position_ptr[0], position_ptr[1], position_ptr[2]};
+        vertices.push_back({position, base_color});
+    }
+
+    return vertices;
+}
+
+std::vector<std::uint16_t> extract_indices(const tinygltf::Model& gltf, const tinygltf::Primitive& primitive)
+{
+    std::vector<std::uint16_t> indices;
+
+    if(primitive.indices < 0)
+        return indices;
+
+    const auto& accessor = gltf.accessors.at(primitive.indices);
+    const auto& view = gltf.bufferViews.at(accessor.bufferView);
+    const auto& buffer = gltf.buffers.at(view.buffer);
+
+    const std::size_t   count = accessor.count;
+    const std::size_t   offset = view.byteOffset + accessor.byteOffset;
+    const std::uint8_t* data = buffer.data.data() + offset;
+
+    indices.reserve(count);
+
+    switch(accessor.componentType)
+    {
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+        for(std::size_t i = 0; i < count; ++i)
+            indices.push_back(static_cast<std::uint16_t>(data[i]));
+        break;
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+    {
+        const std::uint16_t* ptr = reinterpret_cast<const std::uint16_t*>(data);
+        for(std::size_t i = 0; i < count; ++i)
+            indices.push_back(ptr[i]);
+    }
+    break;
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+    {
+        const std::uint32_t* ptr = reinterpret_cast<const std::uint32_t*>(data);
+        for(std::size_t i = 0; i < count; ++i)
+            indices.push_back(static_cast<std::uint16_t>(ptr[i]));
+    }
+    break;
+    }
+
+    return indices;
+}
 
 } // namespace
 
 model::model(bgfx::VertexBufferHandle vertex_buffer, bgfx::IndexBufferHandle index_buffer)
     : m_vertex_buffer(vertex_buffer), m_index_buffer(index_buffer)
 {
-    if(!bgfx::isValid(m_vertex_buffer) || !bgfx::isValid(m_index_buffer))
-    {
-        std::cerr << "Error: Invalid vertex or index buffer" << std::endl;
-    }
-}
-
-model model::make_plane(const cn::math::vector<std::float32_t, 2>& size)
-{
-    float hx = size[0] * 0.5f;
-    float hz = size[1] * 0.5f;
-
-    std::vector<PosColorVertex> vertices = {
-        {{-hx, 0.0f, -hz}, 0xff999999}, // 0
-        {{hx, 0.0f, -hz}, 0xff999999},  // 1
-        {{hx, 0.0f, hz}, 0xff999999},   // 2
-        {{-hx, 0.0f, hz}, 0xff999999},  // 3
-    };
-
-    std::vector<uint16_t> indices = {
-        0, 1, 2,
-        0, 2, 3};
-
-    bgfx::VertexLayout layout = make_position_layout();
-
-    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(PosColorVertex)));
-    const bgfx::Memory* ib_mem = bgfx::copy(indices.data(), uint32_t(indices.size() * sizeof(uint16_t)));
-
-    bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(vb_mem, layout);
-    bgfx::IndexBufferHandle  ibh = bgfx::createIndexBuffer(ib_mem);
-
-    return model(vbh, ibh);
-}
-
-model model::make_cube(const cn::math::vector<std::float32_t, 3>& size)
-{
-    float hx = size[0] * 0.5f;
-    float hy = size[1] * 0.5f;
-    float hz = size[2] * 0.5f;
-
-    std::vector<PosColorVertex> vertices = {
-        {{-hx, -hy, -hz}, 0xff0000ff},
-        {{hx, -hy, -hz}, 0xff00ff00},
-        {{hx, hy, -hz}, 0xff00ffff},
-        {{-hx, hy, -hz}, 0xffff0000},
-        {{-hx, -hy, hz}, 0xffffff00},
-        {{hx, -hy, hz}, 0xffff00ff},
-        {{hx, hy, hz}, 0xffffffff},
-        {{-hx, hy, hz}, 0xff808080},
-    };
-
-    std::vector<uint16_t> indices = {
-        // Back face (-Z)
-        0, 1, 2,
-        0, 2, 3,
-
-        // Front face (+Z)
-        4, 6, 5,
-        4, 7, 6,
-
-        // Left face (-X)
-        0, 3, 7,
-        0, 7, 4,
-
-        // Right face (+X)
-        1, 5, 6,
-        1, 6, 2,
-
-        // Top face (+Y)
-        3, 2, 6,
-        3, 6, 7,
-
-        // Bottom face (-Y)
-        0, 4, 5,
-        0, 5, 1};
-
-    bgfx::VertexLayout layout = make_position_layout();
-
-    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(PosColorVertex)));
-    const bgfx::Memory* ib_mem = bgfx::copy(indices.data(), uint32_t(indices.size() * sizeof(uint16_t)));
-
-    bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(vb_mem, layout);
-    bgfx::IndexBufferHandle  ibh = bgfx::createIndexBuffer(ib_mem);
-
-    return model(vbh, ibh);
 }
 
 model model::load_from_file(std::string_view path)
 {
     tinygltf::TinyGLTF loader;
     tinygltf::Model    gltf_model;
-    std::string        err, warn;
+    std::string        error;
+    std::string        warning;
 
-    bool success = loader.LoadASCIIFromFile(&gltf_model, &err, &warn, std::string(path));
-    if(!success)
+    bool loaded = loader.LoadASCIIFromFile(&gltf_model, &error, &warning, std::string(path)) ||
+                  loader.LoadBinaryFromFile(&gltf_model, &error, &warning, std::string(path));
+
+    if(!warning.empty())
+        std::clog << warning << std::endl;
+
+    if(!loaded)
     {
-        std::cerr << "Failed to load GLTF: " << err << "\n";
+        std::cerr << error << std::endl;
         return model(bgfx::VertexBufferHandle(bgfx::kInvalidHandle), bgfx::IndexBufferHandle(bgfx::kInvalidHandle));
     }
 
-    if(!warn.empty())
+    for(const auto& mesh: gltf_model.meshes)
     {
-        std::cout << "GLTF warning: " << warn << "\n";
-    }
-
-    if(gltf_model.meshes.empty())
-    {
-        std::cerr << "No meshes found in GLTF.\n";
-        return model(bgfx::VertexBufferHandle(bgfx::kInvalidHandle), bgfx::IndexBufferHandle(bgfx::kInvalidHandle));
-    }
-
-    const auto& mesh = gltf_model.meshes[0];
-    if(mesh.primitives.empty())
-    {
-        std::cerr << "No primitives in mesh.\n";
-        return model(bgfx::VertexBufferHandle(bgfx::kInvalidHandle), bgfx::IndexBufferHandle(bgfx::kInvalidHandle));
-    }
-
-    const auto& primitive = mesh.primitives[0];
-
-    if(!primitive.attributes.contains("POSITION"))
-    {
-        std::cerr << "Missing POSITION attribute.\n";
-        return model(bgfx::VertexBufferHandle(bgfx::kInvalidHandle), bgfx::IndexBufferHandle(bgfx::kInvalidHandle));
-    }
-
-    const auto& pos_accessor = gltf_model.accessors[primitive.attributes.at("POSITION")];
-    const auto& pos_view = gltf_model.bufferViews[pos_accessor.bufferView];
-    const auto& pos_buffer = gltf_model.buffers[pos_view.buffer];
-
-    std::vector<PosColorVertex> vertices;
-    vertices.reserve(pos_accessor.count);
-
-    const uint8_t* pos_data = pos_buffer.data.data() + pos_view.byteOffset + pos_accessor.byteOffset;
-    for(size_t i = 0; i < pos_accessor.count; ++i)
-    {
-        const float* f = reinterpret_cast<const float*>(pos_data + i * sizeof(glm::vec3));
-        vertices.push_back({{f[0], f[1], f[2]}, 0xffaaaaaa});
-    }
-
-    std::vector<uint16_t> indices;
-    if(primitive.indices >= 0)
-    {
-        const auto& idx_accessor = gltf_model.accessors[primitive.indices];
-        const auto& idx_view = gltf_model.bufferViews[idx_accessor.bufferView];
-        const auto& idx_buffer = gltf_model.buffers[idx_view.buffer];
-
-        const uint8_t* idx_data = idx_buffer.data.data() + idx_view.byteOffset + idx_accessor.byteOffset;
-        indices.reserve(idx_accessor.count);
-
-        for(size_t i = 0; i < idx_accessor.count; ++i)
+        for(const auto& primitive: mesh.primitives)
         {
-            indices.push_back(reinterpret_cast<const uint16_t*>(idx_data)[i]);
+            if(!primitive.attributes.contains("POSITION"))
+                continue;
+
+            auto vertices = extract_vertices(gltf_model, primitive);
+            auto indices = extract_indices(gltf_model, primitive);
+
+            auto                layout = make_vertex_layout();
+            const bgfx::Memory* vertex_memory = bgfx::copy(vertices.data(), static_cast<std::uint32_t>(vertices.size() * sizeof(vertex)));
+            const bgfx::Memory* index_memory = bgfx::copy(indices.data(), static_cast<std::uint32_t>(indices.size() * sizeof(std::uint16_t)));
+
+            auto vertex_buffer = bgfx::createVertexBuffer(vertex_memory, layout);
+            auto index_buffer = bgfx::createIndexBuffer(index_memory);
+
+            return model(vertex_buffer, index_buffer);
         }
     }
-    else
-    {
-        std::cerr << "Warning: No indices found in primitive.\n";
-    }
 
-    bgfx::VertexLayout layout = make_position_layout();
-
-    const bgfx::Memory* vb_mem = bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(PosColorVertex)));
-    const bgfx::Memory* ib_mem = bgfx::copy(indices.data(), uint32_t(indices.size() * sizeof(uint16_t)));
-
-    bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(vb_mem, layout);
-    bgfx::IndexBufferHandle  ibh = bgfx::createIndexBuffer(ib_mem);
-
-    return model(vbh, ibh);
+    return model(bgfx::VertexBufferHandle(bgfx::kInvalidHandle), bgfx::IndexBufferHandle(bgfx::kInvalidHandle));
 }
 
 bgfx::VertexBufferHandle model::vertex_buffer() const
