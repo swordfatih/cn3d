@@ -7,8 +7,6 @@
 #include <cn/graphics/shader.hpp>
 #include <cn/input/input.hpp>
 #include <cn/math/vector.hpp>
-#include <cn/scene/scene.hpp>
-#include <cn/scene/view.hpp>
 #include <cn/time/time.hpp>
 #include <cn/window/window.hpp>
 #include <iostream>
@@ -20,31 +18,22 @@ int main()
 
     cn::camera camera;
 
-    auto shader = cn::shader::load("shaders/vs_cubes.bin", "shaders/fs_cubes.bin");
+    auto shader = cn::shader::load("../../../shaders/cube");
     auto plane = cn::model::load_from_file("assets/plane.glb");
     auto box = cn::model::load_from_file("assets/cube.glb");
 
     float angle = 0.0f;
-    float radius = 7.0f;
-
     while(window.is_open())
     {
         cn::time::update();
         window.poll_events();
 
         angle += 0.5f * cn::time::delta();
-
-        float x = std::sin(angle) * radius;
-        float z = std::cos(angle) * radius;
-
-        camera.look_at({x, 5.0f, z}, {0.0f, 0.0f, 0.0f});
-
-        glm::mat4 plane_transform = glm::mat4(1.0f);
-        glm::mat4 cube_transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f));
+        camera.orbit({0.0f, 0.0f, 0.0f}, 7.0f, angle, 5.0f);
 
         renderer.begin_frame(camera);
-        renderer.draw(plane, shader, plane_transform);
-        renderer.draw(box, shader, cube_transform);
+        renderer.draw(plane, shader, glm::mat4(1.0f));
+        renderer.draw(box, shader, glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f)));
         renderer.end_frame();
     }
 

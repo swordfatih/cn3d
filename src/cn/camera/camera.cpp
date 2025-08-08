@@ -20,6 +20,17 @@ void camera::look_at(const math::vector<float, 3>& position, const math::vector<
     update_view();
 }
 
+void camera::orbit(const math::vector<float, 3>& center, float radius, float angle_radians, float height)
+{
+    float x = std::sin(angle_radians) * radius + center[0];
+    float z = std::cos(angle_radians) * radius + center[2];
+
+    m_position = {x, height, z};
+    m_target = center;
+
+    update_view();
+}
+
 void camera::update_view()
 {
     glm::vec3 eye{m_position[0], m_position[1], m_position[2]};

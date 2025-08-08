@@ -11,8 +11,8 @@ class camera
 public:
     camera();
 
-    void look_at(const math::vector<float, 3>& position,
-                 const math::vector<float, 3>& target);
+    void look_at(const math::vector<float, 3>& position, const math::vector<float, 3>& target);
+    void orbit(const math::vector<float, 3>& center, float radius, float angle_radians, float height);
 
     const math::matrix<float, 4, 4>& view_matrix() const;
     const math::matrix<float, 4, 4>& projection_matrix() const;

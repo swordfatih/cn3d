@@ -1,4 +1,3 @@
-#include <bgfx/bgfx.h>
 #include <cn/graphics/shader.hpp>
 #include <fstream>
 #include <iostream>
@@ -11,32 +10,30 @@ namespace cn
 namespace
 {
 
-bgfx::ShaderHandle load_shader(std::string_view path)
+bgfx::ShaderHandle load_shader(std::filesystem::path path)
 {
-    std::ifstream file(path.data(), std::ios::binary);
+    if(!std::filesystem::exists(path))
+    {
+        throw std::runtime_error{"Shader file does not exist: " + path.string()};
+    }
+
+    std::ifstream file{path, std::ios::binary};
 
     if(!file)
     {
-        std::cerr << "Failed to open shader file: " << path << '\n';
-        return BGFX_INVALID_HANDLE;
+        throw std::runtime_error{"Failed to open shader file: " + path.string()};
     }
 
-    std::vector<uint8_t> buffer{
-        std::istreambuf_iterator<char>(file),
-        std::istreambuf_iterator<char>()};
+    std::vector<uint8_t> buffer{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 
-    buffer.push_back('\0'); // Ensure null-terminated
+    buffer.push_back('\0');
 
     const bgfx::Memory* mem = bgfx::copy(buffer.data(), static_cast<uint32_t>(buffer.size()));
-    bgfx::ShaderHandle  handle = bgfx::createShader(mem);
+    auto                handle = bgfx::createShader(mem);
 
     if(bgfx::isValid(handle))
     {
-        bgfx::setName(handle, path.data());
-    }
-    else
-    {
-        std::cerr << "Failed to create shader: " << path << '\n';
+        bgfx::setName(handle, path.string().c_str());
     }
 
     return handle;
@@ -44,33 +41,36 @@ bgfx::ShaderHandle load_shader(std::string_view path)
 
 } // namespace
 
-shader shader::load(std::string_view vs_path, std::string_view fs_path)
+shader shader::load(std::filesystem::path path)
 {
-    auto vsh = load_shader(vs_path);
-    if(!bgfx::isValid(vsh))
+    if(!std::filesystem::exists(path))
     {
-        std::cerr << "Vertex shader is invalid!\n";
+        throw std::runtime_error{"Shader folder does not exist: " + path.string()};
     }
 
-    auto fsh = load_shader(fs_path);
-    if(!bgfx::isValid(fsh))
+    const auto vsh = load_shader(path / "vs.bin");
+    const auto fsh = load_shader(path / "fs.bin");
+
+    if(!bgfx::isValid(vsh) || !bgfx::isValid(fsh))
     {
-        std::cerr << "Fragment shader is invalid!\n";
+        std::cerr << "Shader load failed: " << (path / "vs.bin") << " or " << (path / "fs.bin") << '\n';
     }
 
-    bgfx::ProgramHandle program = bgfx::createProgram(vsh, fsh, true);
-    if(!bgfx::isValid(program))
-    {
-        std::cerr << "Failed to create shader program!\n";
-    }
-
-    return shader{program};
+    return shader{bgfx::createProgram(vsh, fsh, true)};
 }
 
 shader::shader(bgfx::ProgramHandle program) noexcept : m_program(program) {}
 
 shader::~shader()
 {
+    for(auto& [_, handle]: m_uniforms)
+    {
+        if(bgfx::isValid(handle))
+        {
+            bgfx::destroy(handle);
+        }
+    }
+
     if(bgfx::isValid(m_program))
     {
         bgfx::destroy(m_program);
@@ -85,9 +85,17 @@ bgfx::ProgramHandle shader::handle() const noexcept
 void shader::submit(bgfx::ViewId view) const noexcept
 {
     if(bgfx::isValid(m_program))
-    {
         bgfx::submit(view, m_program);
+}
+
+bgfx::UniformHandle shader::ensure_uniform(std::string name, bgfx::UniformType::Enum type, uint16_t count)
+{
+    if(!m_uniforms.contains(name))
+    {
+        m_uniforms[name] = bgfx::createUniform(name.data(), type, count);
     }
+
+    return m_uniforms.at(name);
 }
 
 } // namespace cn

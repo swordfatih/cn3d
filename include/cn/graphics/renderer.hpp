@@ -16,7 +16,7 @@ class shader;
 class renderer
 {
 public:
-    explicit renderer(cn::window& window, bgfx::RendererType::Enum type);
+    explicit renderer(cn::window& window, bgfx::RendererType::Enum type = bgfx::RendererType::Count);
     ~renderer();
 
     void begin_frame(const cn::camera& camera);
