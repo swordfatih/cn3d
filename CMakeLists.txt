@@ -39,7 +39,7 @@ add_library(cn3d STATIC ${CN3D_SOURCES})
 target_include_directories(cn3d PUBLIC ${PUBLIC_INCLUDE} ${glm_SOURCE_DIR} ${stb_SOURCE_DIR} ${bx_SOURCE_DIR}/include)
 target_compile_options(cn3d PRIVATE ${CN3D_WARNING_FLAGS})
 target_compile_features(cn3d PUBLIC cxx_std_23)
-target_link_libraries(cn3d PUBLIC Vulkan::Vulkan glfw tinygltf bgfx SFML::Window SFML::System)
+target_link_libraries(cn3d PUBLIC Vulkan::Vulkan glfw tinygltf bgfx SFML::Graphics)
 
 option(CN3D_BUILD_EXAMPLES "Build cn3d examples" ON)
 

@@ -1,13 +1,17 @@
-$input a_position, a_normal
-$output v_position, v_normal
+$input a_position, a_normal, a_texcoord0
+$output v_world_pos, v_normal, v_texcoord0
 
 #include "../common/common.sh"
 
 void main()
 {
-    vec4 pos = vec4(a_position, 1.0);
-    vec4 worldPos = mul(u_model[0], pos);
-    v_position = worldPos.xyz;
-    v_normal = mul((mat3)u_model[0], a_normal);
-    gl_Position = mul(u_modelViewProj, pos);
+    float4 world_pos = mul(u_model[0], float4(a_position, 1.0));
+    v_world_pos = world_pos.xyz;
+
+    float3 normal = mul(cofactor(u_model[0]), a_normal);
+    v_normal = normalize(normal);
+
+    v_texcoord0 = a_texcoord0;
+
+    gl_Position = mul(u_modelViewProj, float4(a_position, 1.0));
 }

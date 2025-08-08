@@ -46,4 +46,41 @@ void material::apply(shader& shader)
     }
 }
 
+void material::set(std::string_view name, const cn::math::vector<float, 3>& vec3)
+{
+    std::array<float, 4> vec = {vec3[0], vec3[1], vec3[2], 0.0f};
+    m_uniforms.push_back({std::string(name), bgfx::UniformType::Vec4, vec});
+}
+
+void material::set(std::string_view name, const cn::math::vector<float, 4>& vec4)
+{
+    std::array<float, 4> vec = {vec4[0], vec4[1], vec4[2], vec4[3]};
+    m_uniforms.push_back({std::string(name), bgfx::UniformType::Vec4, vec});
+}
+
+void material::load_texture(std::string_view uniform_name, const std::filesystem::path& path)
+{
+    if(!std::filesystem::exists(path))
+    {
+        throw std::runtime_error("Texture file not found: " + path.string());
+    }
+
+    int      width, height, channels;
+    uint8_t* pixels = stbi_load(path.string().c_str(), &width, &height, &channels, 4);
+
+    bgfx::TextureHandle texture = bgfx::createTexture2D(
+        (uint16_t)width,
+        (uint16_t)height,
+        false,
+        1,
+        bgfx::TextureFormat::RGBA8,
+        0,
+        bgfx::copy(pixels, width * height * 4));
+
+    stbi_image_free(pixels);
+
+    set(uniform_name, texture);
+}
+
+
 } // namespace cn

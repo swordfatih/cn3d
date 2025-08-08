@@ -1,6 +1,7 @@
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 #include <cn/camera/camera.hpp>
+#include <cn/graphics/material.hpp>
 #include <cn/graphics/model.hpp>
 #include <cn/graphics/renderer.hpp>
 #include <cn/graphics/shader.hpp>
@@ -47,13 +48,16 @@ void renderer::begin_frame(const cn::camera& camera)
     bgfx::touch(0);
 }
 
-void renderer::draw(const cn::model& model, const cn::shader& shader, const glm::mat4& transform)
+void renderer::draw(const cn::model& model, cn::shader& shader, cn::material& material, const glm::mat4& transform)
 {
     bgfx::setTransform(glm::value_ptr(transform));
+
     bgfx::setVertexBuffer(0, model.vertex_buffer());
     bgfx::setIndexBuffer(model.index_buffer());
 
     bgfx::setState(BGFX_STATE_DEFAULT);
+
+    material.apply(shader);
 
     shader.submit(0);
 }

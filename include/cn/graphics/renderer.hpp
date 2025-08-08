@@ -12,6 +12,7 @@ class window;
 class model;
 class camera;
 class shader;
+class material;
 
 class renderer
 {
@@ -20,7 +21,7 @@ public:
     ~renderer();
 
     void begin_frame(const cn::camera& camera);
-    void draw(const cn::model& model, const cn::shader& shader, const glm::mat4& transform);
+    void draw(const cn::model& model, cn::shader& shader, cn::material& material, const glm::mat4& transform);
     void end_frame();
 
 private:

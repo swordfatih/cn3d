@@ -3,10 +3,13 @@
 #include <bgfx/bgfx.h>
 #include <array>
 #include <cn/color/color.hpp>
+#include <cn/math/vector.hpp>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include <filesystem>
+#include <stb_image.h>
 
 namespace cn
 {
@@ -22,6 +25,10 @@ public:
     void set(std::string_view name, const cn::color& color);
     void set(std::string_view name, float value);
     void set(std::string_view name, bgfx::TextureHandle texture);
+    void set(std::string_view name, const cn::math::vector<float, 3>& vec3);
+    void set(std::string_view name, const cn::math::vector<float, 4>& vec4);
+    
+    void load_texture(std::string_view uniform_name, const std::filesystem::path& path);
 
     void apply(shader& shader);
 
